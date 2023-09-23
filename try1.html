@@ -1,42 +1,46 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <!-- Required meta tags -->
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
     <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N" crossorigin="anonymous">
-    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"
+          integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N"
+          crossorigin="anonymous">
+
     <title>Compress Pictures</title>
-  </head>
-  <body>
-    <h1>Compress Pictures</h1><br>
+</head>
+<body>
+<h1>Compress Pictures</h1><br>
 
-    <!-- Add the Upload Picture button -->
-    <div class="container mt-3">
-      <div class="row">
+<!-- Add the Upload Picture button -->
+<div class="container mt-3">
+    <div class="row">
         <div class="col">
-          <input type="file" multiple class="my-image-field" />
-        </div>
-      </div>
-    </div>
-
-    <!-- Display the original and compressed images -->
-    <div class="container mt-3">
-        <div class="col">
-            <h2>Original Images</h2>
-            <div id="original-images"></div>
-        </div>
-        <div class="col">
-            <h2>Compressed Images</h2>
-            <div id="compressed-images"></div>
-            <a id="download-all-link" href="#" download="compressed_images.zip" class="btn btn-primary mt-2">Download All Compressed Images</a>
+            <input type="file" multiple class="my-image-field" />
+            <button class="btn btn-danger mt-2" id="clear-files">Clear Files</button>
         </div>
     </div>
+</div>
 
-    <script>
-      const compressImage = async (file, { quality = 1, type = file.type }) => {
+<!-- Display the original and compressed images -->
+<div class="container mt-3">
+    <div class="col">
+        <h2>Original Images</h2>
+        <div id="original-images"></div>
+    </div>
+    <div class="col">
+        <h2>Compressed Images</h2>
+        <div id="compressed-images"></div>
+        <button id="download-all-button" class="btn btn-primary mt-2">Download All Compressed Images</button>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
+<script>
+    const compressImage = async (file, { quality = 1, type = file.type }) => {
         // Get as image data
         const imageBitmap = await createImageBitmap(file);
 
@@ -49,36 +53,27 @@
 
         // Turn into Blob
         const blob = await new Promise((resolve) =>
-          canvas.toBlob(resolve, type, quality)
+            canvas.toBlob(resolve, type, quality)
         );
 
         // Turn Blob into File
         return new File([blob], file.name, {
-          type: blob.type,
+            type: blob.type,
         });
-      };
+    };
 
-      // Get the selected file from the file input
-      const input = document.querySelector('.my-image-field');
-      const originalImagesDiv = document.getElementById('original-images');
-      const compressedImagesDiv = document.getElementById('compressed-images');
-      const downloadAllLink = document.getElementById('download-all-link');
+    // Get the selected file from the file input
+    const input = document.querySelector('.my-image-field');
+    const originalImagesDiv = document.getElementById('original-images');
+    const compressedImagesDiv = document.getElementById('compressed-images');
+    const downloadAllButton = document.getElementById('download-all-button');
+    const clearFilesButton = document.getElementById('clear-files');
+    const compressedImages = [];
 
-      input.addEventListener('change', async (e) => {
-        // Get the files
-        const { files } = e.target;
-
-        // No files selected
-        if (!files.length) return;
-
-        // Create a zip file to store the compressed images
-        const zip = new JSZip();
-
-        // For every file in the files list
-        for (const file of files) {
+    async function compressAndDisplayImage(file) {
         // We don't have to compress files that aren't images
         if (!file.type.startsWith('image')) {
-            continue;
+            return;
         }
 
         // Display the original image
@@ -93,28 +88,66 @@
             type: 'image/jpeg',
         });
 
-        // Save the compressed file in the zip
-        const compressedFileName = `${file.name.replace(/\.[^/.]+$/, '')}_compressed.jpg`;
-        zip.file(compressedFileName, compressedFile);
-
         // Display the compressed image
         const compressedImage = document.createElement('img');
         compressedImage.src = URL.createObjectURL(compressedFile);
         compressedImage.style.maxWidth = '50%'; // Set max width to 50%
         compressedImagesDiv.appendChild(compressedImage);
+
+        // Add the compressed file to the list
+        compressedImages.push(compressedFile);
+
+        // If we reached 10 files, disable the file input
+        if (compressedImages.length >= 10) {
+            input.disabled = true;
+        }
+    }
+
+    input.addEventListener('change', async (e) => {
+        // Get the files
+        const { files } = e.target;
+
+        // Process and display the selected files
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            await compressAndDisplayImage(file);
         }
 
-        // Generate the zip file and provide the download link
+        // If more than 10 files were selected, show an alert and ignore additional files
+        if (compressedImages.length >= 10) {
+            alert('You can upload a maximum of 10 files. Additional files are ignored.');
+            input.value = ''; // Clear the input field to prevent further uploads
+        }
+    });
+
+    // Clear accumulated files when the clear button is clicked
+    clearFilesButton.addEventListener('click', () => {
+        compressedImages.length = 0; // Clear the compressed images array
+        originalImagesDiv.innerHTML = '';
+        compressedImagesDiv.innerHTML = '';
+        input.disabled = false; // Enable the file input
+        input.value = ''; // Clear the input field
+    });
+
+    downloadAllButton.addEventListener('click', async () => {
+        const zip = new JSZip();
+
+        // Add all compressed images to the zip file
+        compressedImages.forEach((file, index) => {
+            zip.file(`compressed_image_${index + 1}.jpg`, file);
+        });
+
+        // Generate the zip file
         zip.generateAsync({ type: 'blob' }).then((content) => {
-        const zipBlob = new Blob([content]);
-        downloadAllLink.href = URL.createObjectURL(zipBlob);
+            // Create a blob URL for the zip file and trigger the download
+            const blobUrl = URL.createObjectURL(content);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = 'compressed_images.zip';
+            link.click();
+            URL.revokeObjectURL(blobUrl); // Release the object URL
         });
     });
-    </script>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2Lc9npb8tCaSX9FK7E8HnRr0Jz8D6OP9dO5Vg3Q9ct" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
-  </body>
+</script>
+</body>
 </html>
